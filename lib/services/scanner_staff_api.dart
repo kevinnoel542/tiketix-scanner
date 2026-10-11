@@ -20,9 +20,10 @@ class ScannerStaffApi {
   Map<String, dynamic>? credentials;
   String? sessionToken;
   Duration serverOffset = Duration.zero;
+  Map<String, dynamic> configuration = {};
   Future<void>? _refreshing;
 
-  Uri uri(String path) {
+  Uri uri(String path, [Map<String, String>? query]) {
     final base = Uri.tryParse(baseUrl.trim());
     if (base == null || !base.hasAuthority ||
         (base.scheme != 'https' && (kReleaseMode || base.scheme != 'http')) ||
@@ -30,7 +31,7 @@ class ScannerStaffApi {
         (base.path.isNotEmpty && base.path != '/')) {
       throw const ApiException('Configure a valid HTTPS API origin.', code: 'API_CONFIGURATION');
     }
-    return base.replace(path: '/api/v2/scanner$path');
+    return base.replace(path: '/api/v2/scanner$path', queryParameters: query);
   }
 
   Future<void> restore() async {
@@ -57,12 +58,13 @@ class ScannerStaffApi {
 
   Future<Map<String, dynamic>> request(String path, {
     Map<String, dynamic>? body, bool authenticated = true, bool refresh = true,
+    Map<String, String>? query,
   }) async {
     if (authenticated && refresh && credentials != null &&
         DateTime.parse(credentials!['expires_at'] as String).isBefore(DateTime.now().toUtc().add(serverOffset).add(const Duration(seconds: 30)))) {
       await refreshCredentials();
     }
-    final target = uri(path);
+    final target = uri(path, query);
     final method = body == null ? 'GET' : 'POST';
     final encoded = body == null ? '' : jsonEncode(body);
     final headers = <String, String>{'Accept': 'application/json', 'Content-Type': 'application/json',
@@ -72,11 +74,12 @@ class ScannerStaffApi {
       final token = credentials!['access_token'] as String;
       final timestamp = (DateTime.now().toUtc().add(serverOffset).millisecondsSinceEpoch ~/ 1000).toString();
       final nonce = const Uuid().v4();
-      final session = !path.startsWith('/auth/') ? sessionToken ?? '' : '';
-      final proof = [method, target.path, timestamp, nonce, await digest(encoded), await digest(token), await digest(session)].join('\n');
+      final useSession = !path.startsWith('/auth/') && path != '/offline/sync';
+      final session = useSession ? sessionToken ?? '' : '';
+      final proof = [method, '${target.path}${target.hasQuery ? '?${target.query}' : ''}', timestamp, nonce, await digest(encoded), await digest(token), await digest(session)].join('\n');
       headers.addAll({'Authorization': 'Bearer $token', 'X-Scanner-Timestamp': timestamp,
         'X-Scanner-Nonce': nonce, 'X-Scanner-Signature': await sign(proof)});
-      if (sessionToken != null && !path.startsWith('/auth/')) headers['X-Scanner-Session'] = sessionToken!;
+      if (sessionToken != null && useSession) headers['X-Scanner-Session'] = sessionToken!;
     }
     try {
       final response = await (() async {
@@ -84,10 +87,12 @@ class ScannerStaffApi {
         if (body != null) request.body = encoded;
         return http.Response.fromStream(await client.send(request));
       })().timeout(const Duration(seconds: 20));
-      final data = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) throw const FormatException('Expected JSON object');
+      final data = decoded;
       if (response.statusCode < 200 || response.statusCode >= 300) {
         final error = data['error'] as Map?;
-        throw ApiException(error?['message']?.toString() ?? 'Scanner request failed.',
+        throw ApiException(error?['message']?.toString() ?? data['message']?.toString() ?? 'Scanner request failed.',
           code: error?['code']?.toString() ?? 'HTTP_ERROR', status: response.statusCode);
       }
       return data;
@@ -106,6 +111,7 @@ class ScannerStaffApi {
 
   Future<void> configure() async {
     final config = await request('/config', authenticated: false);
+    configuration = config;
     serverOffset = DateTime.parse(config['server_time'] as String).difference(DateTime.now().toUtc());
     final minimum = (config['minimum_version'] as String).split('.').map(int.parse).toList();
     final current = version.split('.').map(int.parse).toList();
@@ -143,6 +149,16 @@ class ScannerStaffApi {
   }
 
   Future<Map<String, dynamic>> profile() => request('/me');
+  Future<Map<String, dynamic>> history() => request('/session/history');
+  Future<Map<String, dynamic>> stats() => request('/session/stats');
+  Future<Map<String, dynamic>> attendees({String search = '', int page = 1}) =>
+      request('/session/attendees', query: {'search': search, 'page': '$page'});
+  Future<Map<String, dynamic>> gateStaff() => request('/gate/staff');
+  Future<Map<String, dynamic>> gateAction(int assignment, String action, {String? device, String? gate}) =>
+      request('/gate/action', body: {'assignment_id': assignment, 'action': action, 'device_id': ?device, 'gate': ?gate});
+  Future<void> heartbeat(int pending, bool offline) async {
+    await request('/session/heartbeat', body: {'pending_scans': pending, 'mode': offline ? 'offline' : 'online'});
+  }
 
   Future<Map<String, dynamic>> startSession(int assignment) async {
     sessionToken = null;
