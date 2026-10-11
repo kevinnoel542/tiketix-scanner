@@ -172,6 +172,7 @@ class _ScannerStaffScreenState extends State<ScannerStaffScreen> with WidgetsBin
     WidgetsBinding.instance.removeObserver(this);
     clock?.cancel();
     api.client.close();
+    unawaited(offline.serial(offline.store.close));
     for (final field in [invitation, phone, code, deviceName, pinValue, confirmation]) { field.dispose(); }
     super.dispose();
   }
@@ -292,8 +293,12 @@ class _StaffScanViewState extends State<StaffScanView> {
   void initState() {
     super.initState();
     heartbeatTimer = Timer.periodic(const Duration(seconds: 60), (_) async {
-      if (busy || offlineMode) return;
-      try { await widget.api.heartbeat(widget.offline.pendingCount, false); } on ApiException catch (failure) {
+      if (busy) return;
+      try {
+        if (widget.offline.pendingCount > 0) await widget.offline.sync();
+        await widget.api.heartbeat(widget.offline.pendingCount, offlineMode);
+        if (mounted) setState(() {});
+      } on ApiException catch (failure) {
         if (mounted && (failure.status == 401 || ['DEVICE_REVOKED', 'SCANNER_SESSION_EXPIRED'].contains(failure.code))) widget.onAccessLost(failure.message);
       } catch (_) { /* Connectivity loss does not grant offline permission. */ }
     });
