@@ -94,12 +94,14 @@ class _ScannerStaffScreenState extends State<ScannerStaffScreen> with WidgetsBin
       error = failure is StateError ? failure.message.toString() : 'This action could not be completed. Please retry.';
       if (fallback != null) { stage = fallback; }
     } finally {
-      if (mounted) setState(() {
+      if (mounted) {
+        setState(() {
         busy = false;
         if (backgrounded && (stage == StaffStage.assignments || stage == StaffStage.scanning)) {
           stage = StaffStage.locked;
         }
-      });
+        });
+      }
     }
   }
 
@@ -288,12 +290,30 @@ class _StaffScanViewState extends State<StaffScanView> {
   DateTime? lastScan;
   bool offlineMode = false;
   Timer? heartbeatTimer;
+  Timer? expiryTimer;
+  bool accessEnded = false;
+
+  bool checkExpiry() {
+    if (accessEnded) return true;
+    final expires = DateTime.tryParse(widget.session['expires_at'] as String? ?? '');
+    if (expires != null && expires.isAfter(widget.offline.serverNow)) return false;
+    accessEnded = true;
+    heartbeatTimer?.cancel();
+    expiryTimer?.cancel();
+    unawaited(camera.stop().catchError((Object _) {}));
+    if (mounted) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      widget.onAccessLost('Your scanner access has ended. Saved scans are kept for syncing. Contact your organizer for a new shift.');
+    }
+    return true;
+  }
 
   @override
   void initState() {
     super.initState();
+    expiryTimer = Timer.periodic(const Duration(seconds: 1), (_) => checkExpiry());
     heartbeatTimer = Timer.periodic(const Duration(seconds: 60), (_) async {
-      if (busy) return;
+      if (checkExpiry() || busy) return;
       try {
         if (widget.offline.pendingCount > 0) await widget.offline.sync();
         await widget.api.heartbeat(widget.offline.pendingCount, offlineMode);
@@ -314,6 +334,7 @@ class _StaffScanViewState extends State<StaffScanView> {
   }
 
   Future<void> resumeCamera() async {
+    if (checkExpiry()) return;
     try { await camera.start(); } catch (_) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Camera unavailable. Enter a ticket code instead.')));
     }
@@ -361,6 +382,7 @@ class _StaffScanViewState extends State<StaffScanView> {
   }
 
   Future<void> scan(String value, {bool confirm = false, String? entitlement, bool retry = false}) async {
+    if (checkExpiry()) return;
     if (busy || !mounted) return;
     final code = normalize(value);
     if (!confirm && !retry && code == lastCode && lastScan != null && DateTime.now().difference(lastScan!) < const Duration(seconds: 3)) return;
@@ -407,6 +429,7 @@ class _StaffScanViewState extends State<StaffScanView> {
 
   @override
   void dispose() {
+    expiryTimer?.cancel();
     heartbeatTimer?.cancel();
     camera.dispose();
     manual.dispose();

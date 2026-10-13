@@ -1,6 +1,18 @@
 # TiketiX Flutter Scanner Documentation
 
-Reviewed: 2026-09-30.
+Updated: 2026-10-12.
+
+## Current Progress
+
+Read [Implementation progress](IMPLEMENTATION_PROGRESS.md) first for the current
+Flutter and Laravel scanner work, local database setup, verification limits and
+remaining release requirements. The app now enters the staff activation/PIN flow;
+the preview-mode description below is historical, not the current entrypoint.
+
+## Historical Review
+
+The following notes describe the 2026-09-30 review. Its API contract and task lists
+are historical planning material and must be reconciled with the v2 implementation.
 
 ## Start here
 

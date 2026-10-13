@@ -18,6 +18,12 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # of the product and file versions while build-number is used as the build suffix.
 version: 1.0.0+1
 
+# Linux test runs use the installed SQLite library without downloading native code.
+hooks:
+  user_defines:
+    sqlite3:
+      source: system
+
 environment:
   sdk: '>=3.11.0 <4.0.0'
 

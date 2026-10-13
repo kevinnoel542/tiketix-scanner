@@ -87,11 +87,28 @@ class ScannerStaffApi {
         if (body != null) request.body = encoded;
         return http.Response.fromStream(await client.send(request));
       })().timeout(const Duration(seconds: 20));
-      final decoded = jsonDecode(response.body);
+      dynamic decoded;
+      try {
+        decoded = jsonDecode(response.body);
+      } on FormatException {
+        if (response.statusCode == 403) {
+          throw const ApiException(
+            'The server blocked this connection. Try another Wi-Fi network or mobile data, then retry.',
+            code: 'CONNECTION_BLOCKED', status: 403,
+          );
+        }
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          throw ApiException(
+            'TiketiX is temporarily unavailable. Please retry shortly.',
+            code: 'HTTP_ERROR', status: response.statusCode,
+          );
+        }
+        rethrow;
+      }
       if (decoded is! Map<String, dynamic>) throw const FormatException('Expected JSON object');
       final data = decoded;
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        final error = data['error'] as Map?;
+        final error = data['error'] is Map ? data['error'] as Map : null;
         throw ApiException(error?['message']?.toString() ?? data['message']?.toString() ?? 'Scanner request failed.',
           code: error?['code']?.toString() ?? 'HTTP_ERROR', status: response.statusCode);
       }
@@ -111,14 +128,24 @@ class ScannerStaffApi {
 
   Future<void> configure() async {
     final config = await request('/config', authenticated: false);
-    configuration = config;
-    serverOffset = DateTime.parse(config['server_time'] as String).difference(DateTime.now().toUtc());
-    final minimum = (config['minimum_version'] as String).split('.').map(int.parse).toList();
-    final current = version.split('.').map(int.parse).toList();
+    final serverTime = config['server_time'] is String
+        ? DateTime.tryParse(config['server_time'] as String) : null;
+    List<int>? parseVersion(dynamic value) {
+      if (value is! String || !RegExp(r'^\d+\.\d+\.\d+$').hasMatch(value)) return null;
+      return value.split('.').map(int.parse).toList();
+    }
+    final minimum = parseVersion(config['minimum_version']);
+    final current = parseVersion(version);
+    if (serverTime == null || minimum == null || current == null) {
+      throw const ApiException('The scanner configuration is invalid. Please contact TiketiX support.',
+        code: 'INVALID_CONFIGURATION');
+    }
     for (var i = 0; i < 3; i++) {
       if (current[i] > minimum[i]) break;
       if (current[i] < minimum[i]) throw const ApiException('Update TiketiX Scanner before continuing.', code: 'UPDATE_REQUIRED');
     }
+    configuration = config;
+    serverOffset = serverTime.difference(DateTime.now().toUtc());
   }
 
   Future<String> startActivation(String invitation, String phone) async =>
