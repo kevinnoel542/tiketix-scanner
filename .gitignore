@@ -47,7 +47,7 @@ app.*.map.json
 # Widget Preview related
 .widget_preview/
 
-# Private credentials and generated artifacts
+# Private credentials and generated release artifacts
 .env
 .env.*
 !.env.example

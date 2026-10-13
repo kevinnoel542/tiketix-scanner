@@ -1,8 +1,8 @@
 import 'package:sqflite/sqflite.dart';
 
 class ScannerOfflineStore {
-  ScannerOfflineStore({DatabaseFactory? factory, String? path})
-      : factory = factory ?? databaseFactory, path = path;
+  ScannerOfflineStore({DatabaseFactory? factory, this.path})
+      : factory = factory ?? databaseFactory;
   final DatabaseFactory factory;
   final String? path;
   Database? _database;

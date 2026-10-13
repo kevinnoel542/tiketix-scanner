@@ -18,14 +18,8 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # of the product and file versions while build-number is used as the build suffix.
 version: 1.0.0+1
 
-# Linux test runs use the installed SQLite library without downloading native code.
-hooks:
-  user_defines:
-    sqlite3:
-      source: system
-
 environment:
-  sdk: '>=3.11.0 <4.0.0'
+  sdk: ^3.13.3
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -50,7 +44,7 @@ dependencies:
   intl: ^0.20.3
 
 dev_dependencies:
-  sqflite_common_ffi: 2.3.6
+  sqflite_common_ffi: ^2.3.6
   flutter_test:
     sdk: flutter
 
@@ -72,6 +66,8 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+  assets:
+    - assets/icon/app_icon.png
 
 flutter_launcher_icons:
   android: true

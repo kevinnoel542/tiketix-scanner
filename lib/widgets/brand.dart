@@ -5,28 +5,20 @@ import '../core/app_theme.dart';
 class TicketXBrand extends StatelessWidget {
   const TicketXBrand({super.key});
   @override
-  Widget build(BuildContext context) => const Row(
+  Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      DecoratedBox(
-        decoration: BoxDecoration(
-          color: AppColors.primary,
-          borderRadius: BorderRadius.all(Radius.circular(6)),
-        ),
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-          child: Text(
-            'TX',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-              fontSize: 18,
-            ),
-          ),
+      ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: Image.asset(
+          'assets/icon/app_icon.png',
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
         ),
       ),
-      SizedBox(width: 8),
-      Text(
+      const SizedBox(width: 8),
+      const Text(
         'TiketiX',
         style: TextStyle(
           color: AppColors.ink,
@@ -34,9 +26,12 @@ class TicketXBrand extends StatelessWidget {
           fontWeight: FontWeight.w900,
         ),
       ),
-      SizedBox(width: 10),
-      SizedBox(height: 22, child: VerticalDivider(color: AppColors.border)),
-      Text(
+      const SizedBox(width: 10),
+      const SizedBox(
+        height: 22,
+        child: VerticalDivider(color: AppColors.border),
+      ),
+      const Text(
         'SCANNER',
         style: TextStyle(
           color: AppColors.muted,
